@@ -12,7 +12,8 @@ import ctypes
 from ctypes import c_int, c_float, POINTER, c_void_p
 import os
 
-# 尝试加载 CUDA kernel 库
+# 尝试加载 CUDA kernel 库（可选，如果使用 PyCUDA SourceModule 则不需要）
+CUDA_LIB_AVAILABLE = False
 try:
     # 假设 CUDA kernel 已编译为 .so 文件
     lib_path = os.path.join(os.path.dirname(__file__), "paged_attention.so")
@@ -35,12 +36,9 @@ try:
         lib.paged_attention_cuda.restype = None
         
         CUDA_LIB_AVAILABLE = True
-    else:
-        CUDA_LIB_AVAILABLE = False
-        print(f"Warning: CUDA library not found at {lib_path}")
-except Exception as e:
+except Exception:
+    # 静默失败，使用 PyCUDA SourceModule 代替
     CUDA_LIB_AVAILABLE = False
-    print(f"Warning: Could not load CUDA library: {e}")
 
 
 class PagedAttentionManager:

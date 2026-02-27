@@ -7,17 +7,12 @@
  */
 
 #include <cuda_runtime.h>
-#include <cuda_fp16.h>
-#include <iostream>
-#include <vector>
-#include <unordered_map>
-#include <cassert>
+#include <math.h>
 
 #define CUDA_CHECK(err) { \
     cudaError_t error = err; \
     if (error != cudaSuccess) { \
-        fprintf(stderr, "CUDA Error at %s:%d - %s\n", __FILE__, __LINE__, cudaGetErrorString(error)); \
-        exit(EXIT_FAILURE); \
+        /* 错误处理在 Python 端进行 */ \
     } \
 }
 
@@ -37,10 +32,10 @@
  * @param scale: 缩放因子
  */
 __global__ void paged_attention_kernel(
-    const __half* __restrict__ Q_physical,      // [num_physical_blocks, block_size, head_dim]
-    const __half* __restrict__ K_physical,      // [num_physical_blocks, block_size, head_dim]
-    const __half* __restrict__ V_physical,      // [num_physical_blocks, block_size, head_dim]
-    __half* __restrict__ O,                     // [batch_size, seq_len, head_dim]
+    const float* __restrict__ Q_physical,      // [num_physical_blocks, block_size, head_dim]
+    const float* __restrict__ K_physical,      // [num_physical_blocks, block_size, head_dim]
+    const float* __restrict__ V_physical,      // [num_physical_blocks, block_size, head_dim]
+    float* __restrict__ O,                     // [batch_size, seq_len, head_dim]
     const int* __restrict__ page_table,         // [batch_size, num_logical_blocks]
     int block_size,
     int head_dim,
@@ -65,7 +60,7 @@ __global__ void paged_attention_kernel(
     for (int d = 0; d < head_dim; d++) {
         int q_offset = physical_block_idx * block_size * head_dim + 
                        offset_in_block * head_dim + d;
-        q_vec[d] = __half2float(Q_physical[q_offset]);
+        q_vec[d] = Q_physical[q_offset];
     }
     
     // 计算注意力分数和输出
@@ -86,7 +81,7 @@ __global__ void paged_attention_kernel(
             for (int d = 0; d < head_dim; d++) {
                 int k_addr = k_physical_block * block_size * head_dim + 
                             k_offset * head_dim + d;
-                float k_val = __half2float(K_physical[k_addr]);
+                float k_val = K_physical[k_addr];
                 score += q_vec[d] * k_val;
             }
             score *= scale;
@@ -114,44 +109,20 @@ __global__ void paged_attention_kernel(
                 
                 int v_addr = k_physical_block * block_size * head_dim + 
                             k_offset * head_dim + d;
-                float v_val = __half2float(V_physical[v_addr]);
+                float v_val = V_physical[v_addr];
                 out_val += scores[k_seq_idx] * v_val;
             }
         }
         
         out_val /= sum_exp;
         int out_addr = batch_idx * seq_len * head_dim + seq_idx * head_dim + d;
-        O[out_addr] = __float2half(out_val);
+        O[out_addr] = out_val;
     }
 }
 
 /**
  * CUDA 包装函数
  */
-extern "C" {
-    void paged_attention_cuda(
-        const __half* Q_physical,
-        const __half* K_physical,
-        const __half* V_physical,
-        __half* O,
-        const int* page_table,
-        int batch_size,
-        int block_size,
-        int head_dim,
-        int num_logical_blocks,
-        float scale
-    ) {
-        int seq_len = num_logical_blocks * block_size;
-        dim3 grid(batch_size, (seq_len + 255) / 256);
-        dim3 block(256);
-        
-        paged_attention_kernel<<<grid, block>>>(
-            Q_physical, K_physical, V_physical, O,
-            page_table, block_size, head_dim, num_logical_blocks, scale
-        );
-        
-        CUDA_CHECK(cudaGetLastError());
-        CUDA_CHECK(cudaDeviceSynchronize());
-    }
-}
+// 注意：PyCUDA 的 SourceModule 会自动处理函数导出，不需要 extern "C"
+// 如果需要编译为 .so 文件，可以使用 extern "C"
 

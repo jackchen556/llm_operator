@@ -5,7 +5,11 @@ Paged Attention 完整示例
 """
 
 import numpy as np
-from paged_attention import PagedAttentionManager
+import sys
+import os
+
+# 导入重命名后的 Python 模块，避免与可能的 .so 文件冲突
+from paged_attention_manager import PagedAttentionManager
 
 try:
     import pycuda.autoinit
@@ -33,10 +37,10 @@ def demo_with_cuda():
     num_logical_blocks = 4
     seq_len = num_logical_blocks * manager.block_size
     
-    # 生成测试数据
-    Q_logical = np.random.randn(batch_size, seq_len, manager.head_dim).astype(np.float16)
-    K_logical = np.random.randn(batch_size, seq_len, manager.head_dim).astype(np.float16)
-    V_logical = np.random.randn(batch_size, seq_len, manager.head_dim).astype(np.float16)
+    # 生成测试数据（使用 float32，因为 PyCUDA 的 gpuarray 不支持 float16）
+    Q_logical = np.random.randn(batch_size, seq_len, manager.head_dim).astype(np.float32)
+    K_logical = np.random.randn(batch_size, seq_len, manager.head_dim).astype(np.float32)
+    V_logical = np.random.randn(batch_size, seq_len, manager.head_dim).astype(np.float32)
     
     print("1. Python 端：创建页表（逻辑管理）")
     page_tables = []
@@ -49,12 +53,13 @@ def demo_with_cuda():
     # 2. Python 端：将数据加载到物理内存（根据页表）
     print("2. Python 端：将数据映射到物理内存")
     # 这里简化处理，实际应该为每个 batch 分别管理
+    # 使用 float32，因为 PyCUDA 的 gpuarray 不支持 float16
     Q_physical = np.zeros((manager.num_physical_blocks, manager.block_size, manager.head_dim), 
-                          dtype=np.float16)
+                          dtype=np.float32)
     K_physical = np.zeros((manager.num_physical_blocks, manager.block_size, manager.head_dim), 
-                          dtype=np.float16)
+                          dtype=np.float32)
     V_physical = np.zeros((manager.num_physical_blocks, manager.block_size, manager.head_dim), 
-                          dtype=np.float16)
+                          dtype=np.float32)
     
     for batch_id in range(batch_size):
         page_table = page_tables[batch_id]
@@ -74,15 +79,20 @@ def demo_with_cuda():
     
     # 3. CUDA 端：将数据传输到 GPU
     print("3. CUDA 端：传输数据到 GPU")
-    Q_physical_gpu = gpuarray.to_gpu(Q_physical.flatten())
-    K_physical_gpu = gpuarray.to_gpu(K_physical.flatten())
-    V_physical_gpu = gpuarray.to_gpu(V_physical.flatten())
+    # PyCUDA 的 gpuarray 不支持 float16，使用 float32
+    Q_physical_float32 = Q_physical.astype(np.float32).flatten()
+    K_physical_float32 = K_physical.astype(np.float32).flatten()
+    V_physical_float32 = V_physical.astype(np.float32).flatten()
+    
+    Q_physical_gpu = gpuarray.to_gpu(Q_physical_float32)
+    K_physical_gpu = gpuarray.to_gpu(K_physical_float32)
+    V_physical_gpu = gpuarray.to_gpu(V_physical_float32)
     
     # 将页表传输到 GPU
     page_table_gpu = gpuarray.to_gpu(np.array(page_tables[0], dtype=np.int32))
     
-    # 分配输出内存
-    O_gpu = gpuarray.zeros((batch_size, seq_len, manager.head_dim), dtype=np.float16)
+    # 分配输出内存（使用 float32，PyCUDA 不支持 float16）
+    O_gpu = gpuarray.zeros((batch_size, seq_len, manager.head_dim), dtype=np.float32)
     print("   数据已传输到 GPU")
     print()
     
@@ -91,7 +101,8 @@ def demo_with_cuda():
     print("   （根据页表从物理内存读取数据）")
     
     # 读取 CUDA kernel 代码
-    with open("paged_attention.cu", "r") as f:
+    cuda_file = os.path.join(os.path.dirname(__file__), "paged_attention.cu")
+    with open(cuda_file, "r") as f:
         cuda_code = f.read()
     
     # 编译并调用
@@ -116,7 +127,9 @@ def demo_with_cuda():
         )
     
     # 5. 将结果传回 CPU
-    O = O_gpu.get()
+    O_float32 = O_gpu.get()
+    # 转换回 float16（如果需要）
+    O = O_float32.astype(np.float16)
     print(f"   输出形状: {O.shape}")
     print()
     
