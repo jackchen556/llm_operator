@@ -183,8 +183,8 @@ def demo_without_cuda():
 
 
 if __name__ == "__main__":
-    if PYCUDA_AVAILABLE:
-        demo_with_cuda()
-    else:
-        demo_without_cuda()
+    #if PYCUDA_AVAILABLE:
+    demo_with_cuda()
+    #else:
+    #    demo_without_cuda()
 

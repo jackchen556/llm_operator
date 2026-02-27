@@ -77,7 +77,7 @@ python paged_attention_demo.py
 If you need to compile to a standalone library:
 
 ```bash
-nvcc -shared -o paged_attention.so paged_attention.cu -lcudart -arch=sm_80
+nvcc -shared -o paged_attention.so paged_attention.cu -lcudart -arch=sm_80  -Xcompiler -fPIC
 ```
 
 Note: When compiling to .so, keep the `extern "C"` wrapper functions.
