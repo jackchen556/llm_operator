@@ -1,91 +1,97 @@
-# Paged Attention 实现示例
+# Paged Attention Implementation Example
 
-这个示例展示了如何实现 Paged Attention，分为两部分：
+This example demonstrates how to implement Paged Attention, divided into two parts:
 
-## 1. Python 端：逻辑管理（记账）
+## 1. Python Side: Logic Management (Bookkeeping)
 
-**文件：`paged_attention.py`**
+**File: `paged_attention.py`**
 
-负责：
-- **页表管理**：记录逻辑块到物理块的映射
+Responsibilities:
+- **Page table management**: Records the mapping from logical blocks to physical blocks
   ```python
   page_table[logical_block_idx] = physical_block_idx
   ```
-- **物理块分配**：管理物理内存块的分配和释放
-- **数据映射**：根据页表将逻辑数据映射到物理内存
+- **Physical block allocation**: Manages allocation and deallocation of physical memory blocks
+- **Data mapping**: Maps logical data to physical memory according to the page table
 
-**关键类：`PagedAttentionManager`**
-- `create_page_table()`: 创建页表
-- `allocate_physical_block()`: 分配物理块
-- `load_data_to_physical()`: 将数据加载到物理内存
+**Key class: `PagedAttentionManager`**
+- `create_page_table()`: Create page table
+- `allocate_physical_block()`: Allocate physical block
+- `load_data_to_physical()`: Load data to physical memory
 
-## 2. CUDA 端：数值计算（算账）
+## 2. CUDA Side: Numerical Computation (Calculation)
 
-**文件：`paged_attention.cu`**
+**File: `paged_attention.cu`**
 
-负责：
-- **根据页表访问物理内存**：使用页表查找物理块索引
-- **计算注意力**：从物理内存读取 Q、K、V 并计算注意力
+Responsibilities:
+- **Access physical memory via page table**: Uses page table to look up physical block indices
+- **Compute attention**: Reads Q, K, V from physical memory and computes attention
 
-**关键函数：`paged_attention_kernel`**
+**Key function: `paged_attention_kernel`**
 ```cuda
-// 根据页表查找物理块
+// Look up physical block via page table
 int physical_block_idx = page_table[batch_idx * num_logical_blocks + logical_block_idx];
 
-// 从物理内存读取数据
+// Read data from physical memory
 int q_offset = physical_block_idx * block_size * head_dim + offset_in_block * head_dim + d;
 float q_val = __half2float(Q_physical[q_offset]);
 ```
 
-## 工作流程
+## Workflow
 
 ```
-1. Python 端：创建页表
-   └─> 逻辑块 0 -> 物理块 5
-   └─> 逻辑块 1 -> 物理块 2
-   └─> 逻辑块 2 -> 物理块 8
+1. Python side: Create page table
+   └─> Logical block 0 -> Physical block 5
+   └─> Logical block 1 -> Physical block 2
+   └─> Logical block 2 -> Physical block 8
    └─> ...
 
-2. Python 端：将数据映射到物理内存
-   └─> 逻辑块 0 的数据 -> 物理块 5
-   └─> 逻辑块 1 的数据 -> 物理块 2
+2. Python side: Map data to physical memory
+   └─> Logical block 0 data -> Physical block 5
+   └─> Logical block 1 data -> Physical block 2
    └─> ...
 
-3. CUDA 端：根据页表计算注意力
-   └─> 需要逻辑块 0 的数据？
-   └─> 查页表：逻辑块 0 -> 物理块 5
-   └─> 从物理块 5 读取数据
-   └─> 计算注意力
+3. CUDA side: Compute attention via page table
+   └─> Need data from logical block 0?
+   └─> Look up page table: Logical block 0 -> Physical block 5
+   └─> Read from physical block 5
+   └─> Compute attention
 ```
 
-## 编译和运行
+## Build and Run
 
-### 编译 CUDA kernel
+### Option 1: Using PyCUDA SourceModule (Recommended, no compilation needed)
 
-```bash
-nvcc -shared -Xcompiler -fPIC -o paged_attention.so paged_attention.cu -lcudart  -arch=sm_80
-```
-
-### 运行 Python 示例
+PyCUDA automatically compiles the CUDA kernel; no manual compilation required:
 
 ```bash
-# 需要 PyCUDA
+# PyCUDA is required
 pip install pycuda
 
-# 运行示例
+# Run the example directly
 python paged_attention_demo.py
 ```
 
-## 关键优势
+### Option 2: Compile to .so file (Optional)
 
-1. **内存复用**：物理块可以动态分配和释放，实现内存复用
-2. **灵活性**：逻辑块和物理块的映射可以动态改变
-3. **效率**：CUDA kernel 直接根据页表访问物理内存，无需额外的数据重组
+If you need to compile to a standalone library:
 
-## 文件说明
+```bash
+nvcc -shared -o paged_attention.so paged_attention.cu -lcudart -arch=sm_80
+```
 
-- `paged_attention.cu`: CUDA kernel 实现
-- `paged_attention.py`: Python 端页表管理
-- `paged_attention_wrapper.py`: Python-CUDA 接口包装
-- `paged_attention_demo.py`: 完整示例
+Note: When compiling to .so, keep the `extern "C"` wrapper functions.
+
+## Key Advantages
+
+1. **Memory reuse**: Physical blocks can be dynamically allocated and freed for memory reuse
+2. **Flexibility**: The mapping between logical and physical blocks can be changed dynamically
+3. **Efficiency**: CUDA kernel directly accesses physical memory via the page table without extra data reorganization
+
+## File Description
+
+- `paged_attention.cu`: CUDA kernel implementation
+- `paged_attention.py`: Python-side page table management
+- `paged_attention_wrapper.py`: Python-CUDA interface wrapper
+- `paged_attention_demo.py`: Complete example
 
