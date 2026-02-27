@@ -133,19 +133,17 @@ class PagedAttentionManager:
             self.V_physical = np.zeros((total_size,), dtype=np.float16)
         
         # 根据页表将逻辑数据映射到物理内存
+        # Q/K/V 形状: [num_logical_blocks, block_size, head_dim]，按逻辑块索引
         for logical_idx in range(num_logical_blocks):
             physical_idx = page_table[logical_idx]
-            
-            q_start = logical_idx * self.block_size * self.head_dim
-            q_end = q_start + self.block_size * self.head_dim
             
             p_start = physical_idx * self.block_size * self.head_dim
             p_end = p_start + self.block_size * self.head_dim
             
-            # 将逻辑块的数据复制到对应的物理块
-            self.Q_physical[p_start:p_end] = Q[q_start:q_end].flatten()
-            self.K_physical[p_start:p_end] = K[q_start:q_end].flatten()
-            self.V_physical[p_start:p_end] = V[q_start:p_end].flatten()
+            # 将逻辑块的数据复制到对应的物理块（每个逻辑块形状为 block_size * head_dim）
+            self.Q_physical[p_start:p_end] = Q[logical_idx].flatten()
+            self.K_physical[p_start:p_end] = K[logical_idx].flatten()
+            self.V_physical[p_start:p_end] = V[logical_idx].flatten()
     
     def compute_attention(self, batch_id, scale=None):
         """
