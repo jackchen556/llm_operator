@@ -1,14 +1,4 @@
-/*
- * Flash Attention Implementation using CUTLASS TensorCore
- * 
- * This implementation TRULY uses CUTLASS TensorCore operations:
- * 1. Uses CUTLASS Iterator to load data into Fragment
- * 2. Calls mma.sync TensorCore instructions via WarpMma::mma_sync()
- * 3. All computation in registers/shared memory (no HBM writeback)
- * 4. Online softmax with recomputation
- * 
- * Key: Actually calls CUTLASS API, not just manual loops
- */
+
 
 #include <cutlass/cutlass.h>
 #include <cutlass/numeric_types.h>
@@ -52,14 +42,7 @@ using ThreadblockShape = cutlass::gemm::GemmShape<64, 64, 32>;
 using WarpShape = cutlass::gemm::GemmShape<16, 16, 16>;
 using InstructionShape = cutlass::gemm::GemmShape<16, 8, 16>;
 
-// 定义 Threadblock-level Mma（使用 TensorCore）
-// 根据 CUTLASS 文档，完整的模板参数列表：
-// ElementA, LayoutA, kAlignmentA,
-// ElementB, LayoutB, kAlignmentB,
-// ElementAccumulator, LayoutC,
-// OpClass, ArchTag,
-// ThreadblockShape, WarpShape, InstructionShape,
-// InterleavedK, Operator, EnableReuseK
+
 constexpr int InterleavedK = 1;
 using Operator = cutlass::arch::OpMultiplyAdd;
 constexpr bool EnableReuseK = false;
@@ -92,11 +75,7 @@ using FragmentA = typename ArchMma::FragmentA;
 using FragmentB = typename ArchMma::FragmentB;
 using AccumulatorFragment = typename ArchMma::FragmentC;
 
-/**
- * Flash Attention Kernel using CUTLASS TensorCore
- * 
- * This kernel TRULY uses CUTLASS TensorCore via Iterator and mma_sync
- */
+
 template<int BLOCK_SIZE_M, int BLOCK_SIZE_N, int HEAD_DIM>
 __global__ void flash_attention_cutlass_tensorcore_kernel(
     const cutlass::half_t* __restrict__ Q,      // [seq_len, head_dim]
@@ -550,3 +529,4 @@ int main() {
     std::cout << "\nDemo completed!" << std::endl;
     return 0;
 }
+
