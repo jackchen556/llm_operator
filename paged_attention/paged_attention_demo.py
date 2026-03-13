@@ -1,14 +1,8 @@
-"""
-Paged Attention 完整示例
-
-展示 Python（逻辑管理）和 CUDA（数值计算）的结合
-"""
 
 import numpy as np
 import sys
 import os
 
-# 导入重命名后的 Python 模块，避免与可能的 .so 文件冲突
 from paged_attention_manager import PagedAttentionManager
 
 try:
@@ -23,21 +17,18 @@ except ImportError:
 
 
 def demo_with_cuda():
-    """使用 CUDA 的完整示例"""
     if not PYCUDA_AVAILABLE:
         print("PyCUDA not available, skipping CUDA demo")
         return
     
     print("=== Paged Attention with CUDA Demo ===\n")
     
-    # 1. Python 端：初始化管理器（逻辑管理）
     manager = PagedAttentionManager(block_size=16, head_dim=64, num_physical_blocks=100)
     
     batch_size = 2
     num_logical_blocks = 4
     seq_len = num_logical_blocks * manager.block_size
     
-    # 生成测试数据（使用 float32，因为 PyCUDA 的 gpuarray 不支持 float16）
     Q_logical = np.random.randn(batch_size, seq_len, manager.head_dim).astype(np.float32)
     K_logical = np.random.randn(batch_size, seq_len, manager.head_dim).astype(np.float32)
     V_logical = np.random.randn(batch_size, seq_len, manager.head_dim).astype(np.float32)
@@ -49,11 +40,9 @@ def demo_with_cuda():
         page_tables.append(page_table)
         print(f"   Batch {batch_id} 页表: {page_table}")
     print()
-    
-    # 2. Python 端：将数据加载到物理内存（根据页表）
+
     print("2. Python 端：将数据映射到物理内存")
-    # 这里简化处理，实际应该为每个 batch 分别管理
-    # 使用 float32，因为 PyCUDA 的 gpuarray 不支持 float16
+
     Q_physical = np.zeros((manager.num_physical_blocks, manager.block_size, manager.head_dim), 
                           dtype=np.float32)
     K_physical = np.zeros((manager.num_physical_blocks, manager.block_size, manager.head_dim), 
@@ -95,17 +84,15 @@ def demo_with_cuda():
     O_gpu = gpuarray.zeros((batch_size, seq_len, manager.head_dim), dtype=np.float32)
     print("   数据已传输到 GPU")
     print()
-    
-    # 4. CUDA 端：调用 kernel 计算（数值计算）
+
     print("4. CUDA 端：调用 kernel 计算注意力")
     print("   （根据页表从物理内存读取数据）")
-    
-    # 读取 CUDA kernel 代码
+
     cuda_file = os.path.join(os.path.dirname(__file__), "paged_attention.cu")
     with open(cuda_file, "r") as f:
         cuda_code = f.read()
     
-    # 编译并调用
+
     mod = SourceModule(cuda_code)
     kernel = mod.get_function("paged_attention_kernel")
     
@@ -126,7 +113,6 @@ def demo_with_cuda():
             grid=(1, (seq_len + 255) // 256, 1)
         )
     
-    # 5. 将结果传回 CPU
     O_float32 = O_gpu.get()
     # 转换回 float16（如果需要）
     O = O_float32.astype(np.float16)
