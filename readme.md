@@ -1,15 +1,7 @@
 
-**`gemm.cu`**
-
-```bash
-nvcc gemm.cu -o gemm -lcublas
-```
-
-生成可执行文件 `gemm`。
-
 ---
 
-**`cutlass_flashAttention_cute_v2.cu`**、**`cutlass_flashAttention_v1.cu`**、**`tensorcore-via-register.cu`**
+**`cutlass_flashAttention_cute_v2.cu`**、**`cutlass_flashAttention_v1.cu`**、**`tensorcore-via-register.cu`**、**`gemm.cu`**
 
 编辑 **`CMakeLists.txt`**（将目标源文件改成你需要的那一个），再用 CMake 构建：
 
